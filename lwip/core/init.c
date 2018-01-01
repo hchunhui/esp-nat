@@ -322,6 +322,10 @@ lwip_init(void)
 #if LWIP_TIMERS
   sys_timeouts_init();
 #endif /* LWIP_TIMERS */
+
+#if IP_NAT
+  ip_nat_init();
+#endif
 }
 
 void ICACHE_FLASH_ATTR print_lwip(void)

@@ -302,6 +302,11 @@ ip_input(struct pbuf *p, struct netif *inp)
   int check_ip_src=1;
 #endif /* IP_ACCEPT_LINK_LAYER_ADDRESSING */
 
+#if IP_NAT
+  extern u8_t ip_nat_input(struct pbuf *p);
+  extern u8_t ip_nat_out(struct pbuf *p);
+#endif
+
   IP_STATS_INC(ip.recv);
   snmp_inc_ipinreceives();
 
@@ -470,15 +475,33 @@ ip_input(struct pbuf *p, struct netif *inp)
 
   /* packet not for us? */
   if (netif == NULL) {
+#if IP_FORWARD || IP_NAT
+    u8_t taken = 0;
+#endif
     /* packet not for us, route or discard */
     LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_TRACE, ("ip_input: packet not for us.\n"));
-#if IP_FORWARD
+#if IP_FORWARD || IP_NAT
     /* non-broadcast packet? */
-    if (!ip_addr_isbroadcast(&current_iphdr_dest, inp)) {
-      /* try to forward IP packet on (other) interfaces */
-      ip_forward(p, iphdr, inp);
-    } else
-#endif /* IP_FORWARD */
+    if (!ip_addr_isbroadcast(&(iphdr->dest), inp)) {
+#if IP_NAT
+    if ((IPH_OFFSET(iphdr) & PP_HTONS(IP_OFFMASK | IP_MF)) == 0) {
+	    taken = ip_nat_out(p);
+    } else {
+	    os_printf("ip_input/ip_nat_out: fragment!!\n");
+    }
+      if (!taken)
+#endif
+      {
+#if IP_FORWARD
+        /* try to forward IP packet on (other) interfaces */
+        if (ip_forward(p, iphdr, inp) != NULL) {
+          taken = 1;
+        }
+#endif
+      }
+    }
+    if (!taken)
+#endif /* IP_FORWARD || IP_NAT */
     {
       snmp_inc_ipinaddrerrors();
       snmp_inc_ipindiscards();
@@ -492,6 +515,7 @@ ip_input(struct pbuf *p, struct netif *inp)
     LWIP_DEBUGF(IP_DEBUG, ("IP packet is a fragment (id=0x%04"X16_F" tot_len=%"U16_F" len=%"U16_F" MF=%"U16_F" offset=%"U16_F"), calling ip_reass()\n",
       ntohs(IPH_ID(iphdr)), p->tot_len, ntohs(IPH_LEN(iphdr)), !!(IPH_OFFSET(iphdr) & PP_HTONS(IP_MF)), (ntohs(IPH_OFFSET(iphdr)) & IP_OFFMASK)*8));
     /* reassemble the packet*/
+    os_printf("ip_reass!!\n");
     p = ip_reass(p);
     /* packet not fully reassembled yet? */
     if (p == NULL) {
@@ -535,6 +559,13 @@ ip_input(struct pbuf *p, struct netif *inp)
 
   current_netif = inp;
   current_header = iphdr;
+
+#if IP_NAT
+  if (!ip_addr_isbroadcast(&(iphdr->dest), inp) &&
+      (ip_nat_input(p) != 0)) {
+     LWIP_DEBUGF(IP_DEBUG, ("ip_input: packet consumed by nat layer\n"));
+  } else
+#endif
 
 #if LWIP_RAW
   /* raw input did not eat the packet? */

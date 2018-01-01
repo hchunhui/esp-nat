@@ -31,7 +31,7 @@ endif # } PDIR
 APPDIR = .
 LDDIR = ../ld
 
-CCFLAGS += -Os
+CCFLAGS += -Os -O3
 
 TARGET_LDFLAGS =		\
 	-nostdlib		\
@@ -98,7 +98,8 @@ DEPENDS_eagle.app.v6 = \
 CONFIGURATION_DEFINES =	-DICACHE_FLASH	\
 			-DLWIP_OPEN_SRC	\
 			-DPBUF_RSV_FOR_WLAN	\
-			-DEBUF_LWIP
+			-DEBUF_LWIP \
+			-DIP_NAT
 
 DEFINES +=				\
 	$(UNIVERSAL_TARGET_DEFINES)	\
