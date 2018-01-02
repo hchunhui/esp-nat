@@ -87,7 +87,7 @@
 #include "netif/wlan_lwip_if.h"
 
 #define LWIP_NAT_TTL_INFINITE                    (INT_MAX)
-#define LWIP_NAT_DEFAULT_TTL_SECONDS             (60)
+#define LWIP_NAT_DEFAULT_TTL_SECONDS             (30)
 #define LWIP_NAT_LONG_TTL_SECONDS                (600)
 
 #define LWIP_NAT_DEFAULT_STATE_TABLES_ICMP       (10)
