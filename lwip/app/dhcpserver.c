@@ -129,9 +129,10 @@ static uint8_t* ICACHE_FLASH_ATTR add_msg_type(uint8_t *optptr, uint8_t type)
 ///////////////////////////////////////////////////////////////////////////////////
 static uint8_t* ICACHE_FLASH_ATTR add_offer_options(uint8_t *optptr)
 {
-        struct ip_addr ipadd;
+        struct ip_addr ipadd, dnsaddr;
 
         ipadd.addr = *( (uint32_t *) &server_address);
+        dnsaddr.addr = dns_getserver(0);
 
 #ifdef USE_CLASS_B_NET
         *optptr++ = DHCP_OPTION_SUBNET_MASK;
@@ -179,10 +180,10 @@ static uint8_t* ICACHE_FLASH_ATTR add_offer_options(uint8_t *optptr)
 #ifdef USE_DNS
 	    *optptr++ = DHCP_OPTION_DNS_SERVER;
 	    *optptr++ = 4;
-	    *optptr++ = ip4_addr1( &ipadd);
-		*optptr++ = ip4_addr2( &ipadd);
-		*optptr++ = ip4_addr3( &ipadd);
-		*optptr++ = ip4_addr4( &ipadd);
+	    *optptr++ = ip4_addr1( &dnsaddr);
+		*optptr++ = ip4_addr2( &dnsaddr);
+		*optptr++ = ip4_addr3( &dnsaddr);
+		*optptr++ = ip4_addr4( &dnsaddr);
 #endif
 
 #ifdef CLASS_B_NET
