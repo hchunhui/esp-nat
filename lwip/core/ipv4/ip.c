@@ -486,8 +486,6 @@ ip_input(struct pbuf *p, struct netif *inp)
 #if IP_NAT
     if ((IPH_OFFSET(iphdr) & PP_HTONS(IP_OFFMASK | IP_MF)) == 0) {
 	    taken = ip_nat_out(p);
-    } else {
-	    os_printf("ip_input/ip_nat_out: fragment!!\n");
     }
       if (!taken)
 #endif
@@ -515,7 +513,6 @@ ip_input(struct pbuf *p, struct netif *inp)
     LWIP_DEBUGF(IP_DEBUG, ("IP packet is a fragment (id=0x%04"X16_F" tot_len=%"U16_F" len=%"U16_F" MF=%"U16_F" offset=%"U16_F"), calling ip_reass()\n",
       ntohs(IPH_ID(iphdr)), p->tot_len, ntohs(IPH_LEN(iphdr)), !!(IPH_OFFSET(iphdr) & PP_HTONS(IP_MF)), (ntohs(IPH_OFFSET(iphdr)) & IP_OFFMASK)*8));
     /* reassemble the packet*/
-    os_printf("ip_reass!!\n");
     p = ip_reass(p);
     /* packet not fully reassembled yet? */
     if (p == NULL) {
