@@ -591,6 +591,9 @@ ip_nat_udp_lookup_incoming(const struct ip_hdr *iphdr, const struct udp_hdr *udp
   int i;
   ip_nat_entries_t *nat_entry = NULL;
 
+  if (ntohs(udphdr->dest) < LWIP_NAT_DEFAULT_UDP_SOURCE_PORT)
+    return NULL;
+
   for (i = 0; i < LWIP_NAT_DEFAULT_STATE_TABLES_UDP; i++) {
     if (ip_nat_udp_table[i].common.ttl) {
       if ((iphdr->src.addr == ip_nat_udp_table[i].common.dest.addr) &&
@@ -668,6 +671,9 @@ ip_nat_tcp_lookup_incoming(const struct ip_hdr *iphdr, const struct tcp_hdr *tcp
 {
   int i;
   ip_nat_entries_t *nat_entry = NULL;
+
+  if (ntohs(tcphdr->dest) < LWIP_NAT_DEFAULT_TCP_SOURCE_PORT)
+    return NULL;
 
   for (i = 0; i < LWIP_NAT_DEFAULT_STATE_TABLES_TCP; i++) {
     if (ip_nat_tcp_table[i].common.ttl) {
