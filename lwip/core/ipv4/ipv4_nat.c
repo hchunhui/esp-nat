@@ -286,14 +286,11 @@ ip_nat_input(struct pbuf *p)
   err_t                 err;
   u8_t                  consumed = 0;
   int                   i;
-  struct pbuf          *q = NULL;
   struct netif         *out_if = eagle_lwip_getif(0);
   struct netif         *in_if = eagle_lwip_getif(1);
   ip_addr_t ipdest;
   u32_t source_addr;
 
-  //GPIO_OUTPUT_SET(5, 1);
-  //os_printf("\nenter ip_nat_input\n");
   ip_nat_dbg_dump("ip_nat_in: checking nat for", iphdr);
 
   switch (IPH_PROTO(iphdr)) {
@@ -302,7 +299,6 @@ ip_nat_input(struct pbuf *p)
       if (tcphdr == NULL) {
         LWIP_DEBUGF(LWIP_NAT_DEBUG, ("ip_nat_input: short tcp packet (%" U16_F " bytes) discarded\n", p->tot_len));
       } else {
-	        //os_printf("\nip_nat_input: dnat tcp\n");
         ip_nat_entries_tcp_t *tcp_entry = ip_nat_tcp_lookup_incoming(iphdr, tcphdr);
         if (tcp_entry != NULL) {
           /* Refresh TCP entry */
@@ -329,7 +325,6 @@ ip_nat_input(struct pbuf *p)
           ("ip_nat_input: short udp packet (%" U16_F " bytes) discarded\n",
           p->tot_len));
       } else {
-	      	        //os_printf("\nip_nat_input: dnat udp\n");
         ip_nat_entries_udp_t *udp_entry = ip_nat_udp_lookup_incoming(iphdr, udphdr);
         if (udp_entry != NULL) {
           /* Refresh UDP entry */
@@ -356,7 +351,6 @@ ip_nat_input(struct pbuf *p)
           ("ip_nat_out: short icmp echo reply packet (%" U16_F " bytes) discarded\n",
           p->tot_len));
       } else {
-	      //os_printf("\nip_nat_input: dnat icmp\n");
         if (ICMP_ER == ICMPH_TYPE(icmphdr)) {
           for (i = 0; i < LWIP_NAT_DEFAULT_STATE_TABLES_ICMP; i++) {
             ip_nat_entries_icmp_t *icmp_entry = &ip_nat_icmp_table[i];
@@ -381,40 +375,6 @@ ip_nat_input(struct pbuf *p)
 
   if(consumed) {
     /* packet consumed, send it out on in_if */
-	        //os_printf("\nip_nat_input: prepare send\n");
-    /* check if the pbuf has room for link headers */
-#if 0
-    if (pbuf_header(p, PBUF_LINK_HLEN)) {
-      /* pbuf has no room for link headers, allocate an extra pbuf */
-      q = pbuf_alloc(PBUF_LINK, 0, PBUF_RAM);
-      if (q == NULL) {
-        LWIP_DEBUGF(LWIP_NAT_DEBUG, ("ip_nat_input: no pbuf for outgoing header\n"));
-        // rt_kprintf("ip_nat_input: no pbuf for outgoing header\n");
-        /* @todo: stats? */
-        pbuf_free(p);
-        p = NULL;
-	//GPIO_OUTPUT_SET(5, 0);
-        return 1;
-      } else {
-        pbuf_cat(q, p);
-      }
-    } else {
-      /* restore p->payload to IP header */
-      if (pbuf_header(p, -PBUF_LINK_HLEN)) {
-        LWIP_DEBUGF(LWIP_NAT_DEBUG, ("ip_nat_input: restoring header failed\n"));
-        // rt_kprintf("ip_nat_input: restoring header failed\n");
-        /* @todo: stats? */
-        pbuf_free(p);
-        p = NULL;
-	//GPIO_OUTPUT_SET(5, 0);
-        return 1;
-      }
-      else q = p;
-    }
-#else
-    q = p;
-#endif
-    /* if we come here, q is the pbuf to send (either points to p or to a chain) */
     iphdr->dest.addr = source_addr;
     ip_nat_chksum_adjust((u8_t *) & IPH_CHKSUM(iphdr),
       (u8_t *) & (out_if->ip_addr.addr), 4,
@@ -425,22 +385,20 @@ ip_nat_input(struct pbuf *p)
     ip_nat_dbg_dump_ip(&(in_if->ip_addr));
     LWIP_DEBUGF(LWIP_NAT_DEBUG, (")\n"));
 
-    //os_printf("\nip_nat_input: before send\n");
     ip_addr_copy(ipdest, iphdr->dest);
-    err = in_if->output(in_if, q, &ipdest);
-    //os_printf("\nip_nat_input: after send\n");
+    err = in_if->output(in_if, p, &ipdest);
+
     if(err != ERR_OK) {
       LWIP_DEBUGF(LWIP_NAT_DEBUG,
         ("ip_nat_input: failed to send rewritten packet. link layer returned %d\n",
         err));
-      // rt_kprintf("ip_nat_input: failed to send rewritten packet. link layer returned %d\n", err);
     }
+
     /* now that q (and/or p) is sent (or not), give up the reference to it
        this frees the input pbuf (p) as we have consumed it. */
-    pbuf_free(q);
+    pbuf_free(p);
   }
-  //os_printf("\nleave ip_nat_input\n");
-  //GPIO_OUTPUT_SET(5, 0);
+
   return consumed;
 }
 
@@ -455,7 +413,7 @@ ip_nat_check_timeout(ip_nat_entry_common_t *nat_entry)
         nat_entry->ttl -= LWIP_NAT_TMR_INTERVAL_SEC;
       } else {
         nat_entry->ttl = 0;
-	return 1;
+        return 1;
       }
     }
   }
@@ -515,8 +473,6 @@ ip_nat_out(struct pbuf *p)
   u8_t found = 0;
   u32_t source_addr;
 
-  //os_printf("\nenter ip_nat_out\n");
-  //GPIO_OUTPUT_SET(5, 1);
   ip_addr_copy(ipdest, iphdr->dest);
 
   ip_nat_dbg_dump("ip_nat_out: checking nat for", iphdr);
@@ -531,7 +487,6 @@ ip_nat_out(struct pbuf *p)
           LWIP_DEBUGF(LWIP_NAT_DEBUG,
             ("ip_nat_out: short tcp packet (%" U16_F " bytes) discarded\n", p->tot_len));
         } else {
-		//os_printf("\nip_nat_out: snat tcp\n");
           ip_nat_entries_tcp_t *tcp_entry = ip_nat_tcp_lookup_outgoing(iphdr, tcphdr, 1);
           if (tcp_entry != NULL) {
             /* Adjust TCP checksum for changing source port */
@@ -554,7 +509,6 @@ ip_nat_out(struct pbuf *p)
           LWIP_DEBUGF(LWIP_NAT_DEBUG,
             ("ip_nat_out: short udp packet (%" U16_F " bytes) discarded\n", p->tot_len));
         } else {
-		//os_printf("\nip_nat_out: snat udp\n");
           ip_nat_entries_udp_t *udp_entry = ip_nat_udp_lookup_outgoing(iphdr, udphdr, 1);
           if (udp_entry != NULL) {
             /* Adjust UDP checksum for changing source port */
@@ -577,7 +531,6 @@ ip_nat_out(struct pbuf *p)
           LWIP_DEBUGF(LWIP_NAT_DEBUG,
             ("ip_nat_out: short icmp echo packet (%" U16_F " bytes) discarded\n", p->tot_len));
         } else {
-		//os_printf("\nip_nat_out: snat icmp\n");
           ip_nat_entries_icmp_t *icmp_entry = NULL;
           if (ICMPH_TYPE(icmphdr) == ICMP_ECHO) {
             for (i = 0; i < LWIP_NAT_DEFAULT_STATE_TABLES_ICMP; i++) {
@@ -621,14 +574,12 @@ ip_nat_out(struct pbuf *p)
         if (err != ERR_OK) {
           LWIP_DEBUGF(LWIP_NAT_DEBUG,
             ("ip_nat_out: failed to send rewritten packet. link layer returned %d\n", err));
-          // rt_kprintf("ip_nat_out: failed to send rewritten packet. link layer returned %d\n", err);
         } else {
           sent = 1;
         }
       }
   }
-  //os_printf("\nleave ip_nat_out\n");
-  //GPIO_OUTPUT_SET(5, 0);
+
   return sent;
 }
 
@@ -718,14 +669,13 @@ ip_nat_udp_lookup_outgoing(const struct ip_hdr *iphdr,
         nat_entry->sport = udphdr->src;
         nat_entry->dport = udphdr->dest;
         ip_nat_cmn_init(iphdr, &(nat_entry->common));
-	nat_entry->common.ttl = 10;
+        nat_entry->common.ttl = 10;
 
         ip_nat_dbg_dump_udp_nat_entry("ip_nat_udp_lookup_outgoing: created new nat entry: ",
                                       nat_entry);
       } else {
-	      os_printf("udp_table full\n");
         LWIP_DEBUGF(LWIP_NAT_DEBUG, ("ip_nat_udp_lookup_outgoing: no more NAT entries available\n"));
-        // rt_kprintf("ip_nat_udp_lookup_outgoing: no more NAT entries available\n");
+        os_printf("udp_table full\n");
       }
     }
   }
@@ -752,11 +702,6 @@ ip_nat_tcp_lookup_incoming(const struct ip_hdr *iphdr, const struct tcp_hdr *tcp
           (tcphdr->src == ip_nat_tcp_table[i].dport) &&
           (tcphdr->dest == ip_nat_tcp_table[i].nport)) {
         nat_entry = &ip_nat_tcp_table[i];
-	if(TCPH_FLAGS(tcphdr) & TCP_FIN) {
-		if (nat_entry->common.ttl > 5) {
-			nat_entry->common.ttl = 5;
-		}
-	}
         ip_nat_dbg_dump_tcp_nat_entry("ip_nat_tcp_lookup_incoming: found existing nat entry: ",
                                       nat_entry);
         break;
@@ -793,13 +738,6 @@ ip_nat_tcp_lookup_outgoing(const struct ip_hdr *iphdr,
 
         ip_nat_dbg_dump_tcp_nat_entry("ip_nat_tcp_lookup_outgoing: found existing nat entry: ",
                                       nat_entry);
-	if(TCPH_FLAGS(tcphdr) & TCP_FIN) {
-		if (nat_entry->common.ttl > LWIP_NAT_DEFAULT_TTL_SECONDS) {
-			nat_entry->common.ttl -= LWIP_NAT_DEFAULT_TTL_SECONDS / 2;
-		} else {
-			nat_entry->common.ttl = 0;
-		}
-	}
         break;
       }
     } else {
@@ -818,9 +756,8 @@ ip_nat_tcp_lookup_outgoing(const struct ip_hdr *iphdr,
         ip_nat_dbg_dump_tcp_nat_entry("ip_nat_tcp_lookup_outgoing: created new nat entry: ",
                                       nat_entry);
       } else {
-	      os_printf("tcp table full\n");
         LWIP_DEBUGF(LWIP_NAT_DEBUG, ("ip_nat_udp_lookup_outgoing: no more NAT entries available\n"));
-        // rt_kprintf("ip_nat_udp_lookup_outgoing: no more NAT entries available\n");
+        os_printf("tcp table full\n");
       }
     }
   }
