@@ -119,6 +119,7 @@
 
 #define LWIP_NAT_TTL_INFINITE                    (INT_MAX)
 #define LWIP_NAT_DEFAULT_TTL_SECONDS             (60)
+#define LWIP_NAT_LONG_TTL_SECONDS                (600)
 #define LWIP_NAT_FORWARD_HEADER_SIZE_MIN         (sizeof(struct eth_hdr))
 
 #define LWIP_NAT_DEFAULT_STATE_TABLES_ICMP       (10)
@@ -151,6 +152,7 @@ typedef struct ip_nat_entries_icmp
 typedef struct ip_nat_entries
 {
   ip_nat_entry_common_t common;
+  u16_t                 state;
   u16_t                 nport;
   u16_t                 sport;
   u16_t                 dport;
@@ -247,6 +249,24 @@ ip_nat_check_header(struct pbuf *p, u16_t min_size)
     return NULL;
 }
 
+static void tcp_refresh_entry(const struct tcp_hdr *tcphdr, ip_nat_entries_t *nat_entry)
+{
+  nat_entry->common.ttl = LWIP_NAT_DEFAULT_TTL_SECONDS;
+
+  if (TCPH_FLAGS(tcphdr) & (TCP_FIN)) {
+    nat_entry->state = 1;
+  }
+
+  if (!(TCPH_FLAGS(tcphdr) & (TCP_FIN|TCP_SYN|TCP_RST)) &&
+    nat_entry->state == 0)
+    nat_entry->common.ttl = LWIP_NAT_LONG_TTL_SECONDS;
+}
+
+static void udp_refresh_entry(const struct udp_hdr *udphdr, ip_nat_entries_t *nat_entry)
+{
+  nat_entry->common.ttl = LWIP_NAT_DEFAULT_TTL_SECONDS;
+}
+
 /** Input processing: check if a received packet belongs to a NAT entry
  * and if so, translated it and send it on.
  *
@@ -279,8 +299,7 @@ ip_nat_input(struct pbuf *p)
       } else {
         ip_nat_entries_t *tcp_entry = ip_nat_tcp_lookup_incoming(iphdr, tcphdr);
         if (tcp_entry != NULL) {
-          /* Refresh TCP entry */
-          tcp_entry->common.ttl = LWIP_NAT_DEFAULT_TTL_SECONDS;
+          tcp_refresh_entry(tcphdr, tcp_entry);
           tcphdr->dest = tcp_entry->sport;
           /* Adjust TCP checksum for changed destination port */
           ip_nat_chksum_adjust((u8_t *)&(tcphdr->chksum),
@@ -305,8 +324,7 @@ ip_nat_input(struct pbuf *p)
       } else {
         ip_nat_entries_t *udp_entry = ip_nat_udp_lookup_incoming(iphdr, udphdr);
         if (udp_entry != NULL) {
-          /* Refresh UDP entry */
-          udp_entry->common.ttl = LWIP_NAT_DEFAULT_TTL_SECONDS;
+          udp_refresh_entry(udphdr, udp_entry);
           udphdr->dest = udp_entry->sport;
           /* Adjust UDP checksum for changed destination port */
           ip_nat_chksum_adjust((u8_t *)&(udphdr->chksum),
@@ -467,6 +485,7 @@ ip_nat_out(struct pbuf *p)
         } else {
           ip_nat_entries_t *tcp_entry = ip_nat_tcp_lookup_outgoing(iphdr, tcphdr);
           if (tcp_entry != NULL) {
+            tcp_refresh_entry(tcphdr, tcp_entry);
             /* Adjust TCP checksum for changing source port */
             tcphdr->src = tcp_entry->nport;
             ip_nat_chksum_adjust((u8_t *)&(tcphdr->chksum),
@@ -489,6 +508,7 @@ ip_nat_out(struct pbuf *p)
         } else {
           ip_nat_entries_t *udp_entry = ip_nat_udp_lookup_outgoing(iphdr, udphdr);
           if (udp_entry != NULL) {
+            udp_refresh_entry(udphdr, udp_entry);
             /* Adjust UDP checksum for changing source port */
             udphdr->src = udp_entry->nport;
             ip_nat_chksum_adjust((u8_t *)&(udphdr->chksum),
@@ -646,7 +666,6 @@ ip_nat_udp_lookup_outgoing(const struct ip_hdr *iphdr, const struct udp_hdr *udp
         nat_entry->sport = udphdr->src;
         nat_entry->dport = udphdr->dest;
         ip_nat_cmn_init(iphdr, &(nat_entry->common));
-        nat_entry->common.ttl = 10;
 
         ip_nat_dbg_dump_udp_nat_entry("ip_nat_udp_lookup_outgoing: created new nat entry: ",
                                       nat_entry);
@@ -721,8 +740,10 @@ ip_nat_tcp_lookup_outgoing(const struct ip_hdr *iphdr, const struct tcp_hdr *tcp
     }
   }
   if (nat_entry == NULL) {
+    if (TCPH_FLAGS(tcphdr) & TCP_SYN) {
       if (last_free != -1) {
         nat_entry = &ip_nat_tcp_table[last_free];
+        nat_entry->state = 0;
         nat_entry->nport = htons((u16_t) (LWIP_NAT_DEFAULT_TCP_SOURCE_PORT + (counter++)%1024));
         nat_entry->sport = tcphdr->src;
         nat_entry->dport = tcphdr->dest;
@@ -734,6 +755,7 @@ ip_nat_tcp_lookup_outgoing(const struct ip_hdr *iphdr, const struct tcp_hdr *tcp
         LWIP_DEBUGF(LWIP_NAT_DEBUG, ("ip_nat_udp_lookup_outgoing: no more NAT entries available\n"));
         os_printf("tcp table full\n");
       }
+    }
   }
   return nat_entry;
 }
