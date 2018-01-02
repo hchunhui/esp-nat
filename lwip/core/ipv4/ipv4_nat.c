@@ -238,18 +238,13 @@ ip_nat_init(void)
 static void*
 ip_nat_check_header(struct pbuf *p, u16_t min_size)
 {
-  void *ret = NULL;
   struct ip_hdr  *iphdr = (struct ip_hdr*)p->payload;
   s16_t iphdr_len = IPH_HL(iphdr) * 4;
 
-  if(!pbuf_header(p, -iphdr_len)) {
-    if(p->tot_len >= min_size) {
-      ret = p->payload;
-    }
-    /* Restore pbuf payload pointer from previous header check. */
-    pbuf_header(p, iphdr_len);
-  }
-  return ret;
+  if(p->tot_len >= min_size + iphdr_len)
+    return (u8_t *)p->payload + iphdr_len;
+  else
+    return NULL;
 }
 
 /** Input processing: check if a received packet belongs to a NAT entry
