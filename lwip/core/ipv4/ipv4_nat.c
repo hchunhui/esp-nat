@@ -541,7 +541,7 @@ ip_nat_udp_lookup_outgoing(const struct ip_hdr *iphdr, const struct udp_hdr *udp
 {
   int i;
   ip_nat_entries_t *nat_entry = NULL;
-  int last_free = -1;
+  int first_free = -1;
 
   for (i = 0; i < LWIP_NAT_DEFAULT_STATE_TABLES_UDP; i++) {
     if (ip_nat_udp_table[i].common.ttl) {
@@ -552,13 +552,13 @@ ip_nat_udp_lookup_outgoing(const struct ip_hdr *iphdr, const struct udp_hdr *udp
         nat_entry = &ip_nat_udp_table[i];
         break;
       }
-    } else {
-        last_free = i;
+    } else if (first_free == -1) {
+        first_free = i;
     }
   }
   if (nat_entry == NULL) {
-      if (last_free != -1) {
-        nat_entry = &ip_nat_udp_table[last_free];
+      if (first_free != -1) {
+        nat_entry = &ip_nat_udp_table[first_free];
         nat_entry->nport = htons((u16_t) (LWIP_NAT_DEFAULT_UDP_SOURCE_PORT + (counter++)%1024));
         nat_entry->sport = udphdr->src;
         nat_entry->dport = udphdr->dest;
@@ -612,7 +612,7 @@ ip_nat_tcp_lookup_outgoing(const struct ip_hdr *iphdr, const struct tcp_hdr *tcp
 {
   int i;
   ip_nat_entries_t *nat_entry = NULL;
-  int last_free = -1;
+  int first_free = -1;
 
   for (i = 0; i < LWIP_NAT_DEFAULT_STATE_TABLES_TCP; i++) {
     if (ip_nat_tcp_table[i].common.ttl) {
@@ -623,14 +623,14 @@ ip_nat_tcp_lookup_outgoing(const struct ip_hdr *iphdr, const struct tcp_hdr *tcp
         nat_entry = &ip_nat_tcp_table[i];
         break;
       }
-    } else {
-        last_free = i;
+    } else if (first_free == -1) {
+        first_free = i;
     }
   }
   if (nat_entry == NULL) {
     if (TCPH_FLAGS(tcphdr) & TCP_SYN) {
-      if (last_free != -1) {
-        nat_entry = &ip_nat_tcp_table[last_free];
+      if (first_free != -1) {
+        nat_entry = &ip_nat_tcp_table[first_free];
         nat_entry->state = 0;
         nat_entry->nport = htons((u16_t) (LWIP_NAT_DEFAULT_TCP_SOURCE_PORT + (counter++)%1024));
         nat_entry->sport = tcphdr->src;
